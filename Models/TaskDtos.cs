@@ -62,3 +62,37 @@ public class TimeEstimationDto
     public int EstimatedMinutes { get; set; }
     public string Reasoning { get; set; } = string.Empty;
 }
+
+public class TimeBlockDto
+{
+    public string TimeSlot { get; set; } = string.Empty; // Örn: "09:00 - 10:30"
+    public string TaskTitle { get; set; } = string.Empty;
+    public string Type { get; set; } = "DeepWork"; // DeepWork, ShortTask, Break
+    public string Note { get; set; } = string.Empty;
+}
+
+public class DailyScheduleResultDto
+{
+    public DateTime TargetDate { get; set; }
+    public List<TimeBlockDto> Schedule { get; set; } = new();
+    public string CoachNote { get; set; } = string.Empty;
+}
+
+public class WorkloadAnalysisDto
+{
+    public DateTime AnalyzedDate { get; set; }
+    public int TotalTasksOnDate { get; set; }
+    public bool HasConflictOrOverload { get; set; }
+    public string RiskLevel { get; set; } = "Low"; // Low, Medium, High
+    public string AIAnalysis { get; set; } = string.Empty;
+    public List<string> SuggestedAdjustments { get; set; } = new();
+}
+
+public class TaskEnrichmentDto
+{
+    public int TaskId { get; set; }
+    public string TaskTitle { get; set; } = string.Empty;
+    public string DifficultyLevel { get; set; } = "Medium"; // Easy, Medium, Hard
+    public List<string> SuggestedTags { get; set; } = new();
+    public List<string> ActionTips { get; set; } = new();
+}

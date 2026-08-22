@@ -283,4 +283,228 @@ Görev Açıklaması: ""{description ?? "Açıklama yok"}""";
             };
         }
     }
+
+    public async Task<DailyScheduleResultDto> GenerateDailyScheduleAsync(DateTime targetDate, IEnumerable<TaskItem> tasks)
+    {
+        var taskListSummary = JsonSerializer.Serialize(tasks.Select(t => new
+        {
+            t.Id,
+            t.Title,
+            t.Priority,
+            t.Category,
+            t.DueDate
+        }));
+
+        var prompt = $@"
+Sen profesyonel bir zaman yönetimi ve üretkenlik asistanısın.
+Aşağıda verilen görev listesini inceleyerek hedef tarih ({targetDate:yyyy-MM-dd}) için sabah 09:00 - 18:00 saatleri arasına uygun bir 'Time-Blocking' (Zaman Bloklama) günlük çalışma planı çıkar.
+Mantıklı dinlenme aralıkları (Break) ve odak blokları (DeepWork) ekle.
+
+SADECE geçerli bir JSON nesnesi döndür. Markdown (```json) etiketi veya başka açıklama metni kesinlikle ekleme.
+
+Format:
+{{
+  ""targetDate"": ""{targetDate:yyyy-MM-ddTHH:mm:ssZ}"",
+  ""coachNote"": ""Günün verimli geçmesi için kısa bir motivasyon/strateji notu."",
+  ""schedule"": [
+    {{
+      ""timeSlot"": ""09:00 - 10:30"",
+      ""taskTitle"": ""Görev Adı"",
+      ""type"": ""DeepWork"",
+      ""note"": ""Açıklama""
+    }}
+  ]
+}}
+
+Görevler:
+{taskListSummary}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            var result = JsonSerializer.Deserialize<DailyScheduleResultDto>(cleanedJson, options);
+            return result ?? new DailyScheduleResultDto { TargetDate = targetDate, CoachNote = "Plan oluşturuldu." };
+        }
+        catch
+        {
+            return new DailyScheduleResultDto
+            {
+                TargetDate = targetDate,
+                CoachNote = "Varsayılan şablon uygulandı.",
+                Schedule = new List<TimeBlockDto>
+            {
+                new() { TimeSlot = "09:00 - 12:00", TaskTitle = "Öncelikli Görevler", Type = "DeepWork", Note = "Kesintisiz odaklanma" },
+                new() { TimeSlot = "12:00 - 13:00", TaskTitle = "Öğle Molası", Type = "Break", Note = "Yemek ve dinlenme" },
+                new() { TimeSlot = "13:00 - 17:00", TaskTitle = "Kalan Görevler", Type = "DeepWork", Note = "Rutin işleri tamamlama" }
+            }
+            };
+        }
+    }
+
+    public async Task<WorkloadAnalysisDto> AnalyzeWorkloadAndConflictsAsync(DateTime targetDate, IEnumerable<TaskItem> tasksOnDate)
+    {
+        var taskList = tasksOnDate.Select(t => new
+        {
+            t.Id,
+            t.Title,
+            t.DueDate,
+            t.Priority,
+            t.Category
+        }).ToList();
+
+        var prompt = $@"
+Sen profesyonel bir iş yükü optimizasyonu uzmanısın.
+Aşağıda kullanıcının {targetDate:yyyy-MM-dd} tarihindeki bekleyen görevleri yer almaktadır:
+
+{JsonSerializer.Serialize(taskList)}
+
+Bu görevleri analiz et:
+1. Görev sayısı, öncelikleri veya saat çakışmaları nedeniyle bir aşırı yüklenme (overload) veya risk var mı?
+2. Risk seviyesini belirle ('Low', 'Medium', 'High').
+3. Kullanıcının günü daha rahat yönetmesi için görevleri nasıl ertelemesi veya dengelemesi gerektiğine dair 2-4 somut öneri maddesi sun.
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin ekleme:
+{{
+  ""analyzedDate"": ""{targetDate:yyyy-MM-ddTHH:mm:ssZ}"",
+  ""totalTasksOnDate"": {taskList.Count},
+  ""hasConflictOrOverload"": true,
+  ""riskLevel"": ""High"",
+  ""aiAnalysis"": ""Günün değerlendirmesi ve çakışma özeti."",
+  ""suggestedAdjustments"": [
+    ""1. Öneri: X görevini yarına ertele"",
+    ""2. Öneri: Y görevini sabah saatine çek""
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<WorkloadAnalysisDto>(cleanedJson, options);
+            return result ?? new WorkloadAnalysisDto { AnalyzedDate = targetDate, TotalTasksOnDate = taskList.Count, AIAnalysis = "Analiz tamamlandı." };
+        }
+        catch
+        {
+            return new WorkloadAnalysisDto
+            {
+                AnalyzedDate = targetDate,
+                TotalTasksOnDate = taskList.Count,
+                HasConflictOrOverload = taskList.Count > 3,
+                RiskLevel = taskList.Count > 3 ? "Medium" : "Low",
+                AIAnalysis = "Otomatik kural tabanlı analiz uygulandı.",
+                SuggestedAdjustments = new List<string> { "Görevleri öncelik sırasına göre tamamlayın." }
+            };
+        }
+    }
+    public async Task<TaskEnrichmentDto> EnrichTaskAsync(int taskId, string taskTitle, string? description, string category)
+    {
+        var prompt = $@"
+Kullanıcının verilen görevini incele. Bu görevi tamamlamayı kolaylaştırmak için:
+1. Zorluk derecesini belirle ('Easy', 'Medium', 'Hard').
+2. Görevle ilgili 3-4 adet kısa ve anlamlı etiket (Tag) öner.
+3. Görevi verimli bitirmesi için 2-3 adet hap ipucu/tavsiye (ActionTip) üret.
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin ekleme:
+{{
+  ""difficultyLevel"": ""Medium"",
+  ""suggestedTags"": [""#Ders"", ""#Fizik"", ""#Sınav""] ,
+  ""actionTips"": [
+    ""Önceki yılların çıkmış sorularını çözün."",
+    ""Formül kağıdı hazırlayarak çalışın.""
+  ]
+}}
+
+Görev Başlığı: ""{taskTitle}""
+Görev Açıklaması: ""{description ?? "Açıklama yok"}""
+Kategori: ""{category}""";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            using var doc = JsonDocument.Parse(cleanedJson);
+            var root = doc.RootElement;
+
+            var tags = new List<string>();
+            if (root.TryGetProperty("suggestedTags", out var tagsElem))
+            {
+                tags = JsonSerializer.Deserialize<List<string>>(tagsElem.GetRawText()) ?? new();
+            }
+
+            var tips = new List<string>();
+            if (root.TryGetProperty("actionTips", out var tipsElem))
+            {
+                tips = JsonSerializer.Deserialize<List<string>>(tipsElem.GetRawText()) ?? new();
+            }
+
+            return new TaskEnrichmentDto
+            {
+                TaskId = taskId,
+                TaskTitle = taskTitle,
+                DifficultyLevel = root.GetProperty("difficultyLevel").GetString() ?? "Medium",
+                SuggestedTags = tags,
+                ActionTips = tips
+            };
+        }
+        catch
+        {
+            return new TaskEnrichmentDto
+            {
+                TaskId = taskId,
+                TaskTitle = taskTitle,
+                DifficultyLevel = "Medium",
+                SuggestedTags = new List<string> { "#Genel", "#Plan" },
+                ActionTips = new List<string> { "Görevi küçük parçalara bölerek başlayın." }
+            };
+        }
+    }
+
 }

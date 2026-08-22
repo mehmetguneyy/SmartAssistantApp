@@ -120,4 +120,68 @@ public class AssistantController : ControllerBase
         var estimation = await _assistantService.EstimateTaskDurationAsync(task.Id, task.Title, task.Description);
         return Ok(estimation);
     }
+
+    [HttpGet("daily-schedule")]
+    public async Task<ActionResult<DailyScheduleResultDto>> GetDailySchedule([FromQuery] DateTime? date)
+    {
+        var targetDate = date ?? DateTime.UtcNow.Date;
+
+        // Tamamlanmamış görevleri al
+        var pendingTasks = await _context.Tasks
+            .Where(t => !t.IsCompleted)
+            .ToListAsync();
+
+        if (!pendingTasks.Any())
+        {
+            return Ok(new DailyScheduleResultDto
+            {
+                TargetDate = targetDate,
+                CoachNote = "Planlanacak bekleyen görev bulunamadı. Harika bir gün!"
+            });
+        }
+
+        var schedule = await _assistantService.GenerateDailyScheduleAsync(targetDate, pendingTasks);
+        return Ok(schedule);
+    }
+
+    [HttpGet("workload-analysis")]
+    public async Task<ActionResult<WorkloadAnalysisDto>> GetWorkloadAnalysis([FromQuery] DateTime? date)
+    {
+        var targetDate = (date ?? DateTime.UtcNow).Date;
+        var nextDay = targetDate.AddDays(1);
+
+        // Seçilen tarihe denk gelen tamamlanmamış görevleri filtrele
+        var tasksOnDate = await _context.Tasks
+            .Where(t => !t.IsCompleted && t.DueDate.HasValue && t.DueDate.Value >= targetDate && t.DueDate.Value < nextDay)
+            .ToListAsync();
+
+        if (!tasksOnDate.Any())
+        {
+            return Ok(new WorkloadAnalysisDto
+            {
+                AnalyzedDate = targetDate,
+                TotalTasksOnDate = 0,
+                HasConflictOrOverload = false,
+                RiskLevel = "Low",
+                AIAnalysis = "Bu tarihte planlanmış bekleyen bir görev bulunmamaktadır. Gününüz tamamen serbest!",
+                SuggestedAdjustments = new List<string>()
+            });
+        }
+
+        var analysis = await _assistantService.AnalyzeWorkloadAndConflictsAsync(targetDate, tasksOnDate);
+        return Ok(analysis);
+    }
+
+    [HttpPost("enrich-task/{taskId}")]
+    public async Task<ActionResult<TaskEnrichmentDto>> EnrichTask(int taskId)
+    {
+        var task = await _context.Tasks.FindAsync(taskId);
+        if (task == null)
+        {
+            return NotFound($"ID {taskId} olan görev bulunamadı.");
+        }
+
+        var enrichment = await _assistantService.EnrichTaskAsync(task.Id, task.Title, task.Description, task.Category);
+        return Ok(enrichment);
+    }
 }

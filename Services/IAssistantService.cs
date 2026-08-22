@@ -24,4 +24,13 @@ public interface IAssistantService
 
     // Görevin tahmini tamamlanma süresini hesaplayan metot
     Task<TimeEstimationDto> EstimateTaskDurationAsync(int taskId, string taskTitle, string? description);
+
+    // Günün görevlerini saat saat zaman bloklarýna ayýran metot
+    Task<DailyScheduleResultDto> GenerateDailyScheduleAsync(DateTime targetDate, IEnumerable<TaskItem> tasks);
+
+    // Belirli bir gündeki görev yoðunluðunu ve çakýþmalarý analiz eden metot
+    Task<WorkloadAnalysisDto> AnalyzeWorkloadAndConflictsAsync(DateTime targetDate, IEnumerable<TaskItem> tasksOnDate);
+
+    // Görevi analiz edip etiketler, zorluk seviyesi ve pratik ipuçlarý ekleyen metot
+    Task<TaskEnrichmentDto> EnrichTaskAsync(int taskId, string taskTitle, string? description, string category);
 }
