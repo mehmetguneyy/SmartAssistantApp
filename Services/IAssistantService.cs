@@ -33,4 +33,7 @@ public interface IAssistantService
 
     // Görevi analiz edip etiketler, zorluk seviyesi ve pratik ipuçlarý ekleyen metot
     Task<TaskEnrichmentDto> EnrichTaskAsync(int taskId, string taskTitle, string? description, string category);
+
+    // Kullanýcýnýn görev geçmiþine göre periyodik alýþkanlýklar ve tekrarlayan görevler öneren metot
+    Task<HabitRecommendationResultDto> RecommendHabitsAsync(IEnumerable<TaskItem> allTasks);
 }

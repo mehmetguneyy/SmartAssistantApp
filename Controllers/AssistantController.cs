@@ -184,4 +184,23 @@ public class AssistantController : ControllerBase
         var enrichment = await _assistantService.EnrichTaskAsync(task.Id, task.Title, task.Description, task.Category);
         return Ok(enrichment);
     }
+
+    [HttpGet("recommend-habits")]
+    public async Task<ActionResult<HabitRecommendationResultDto>> RecommendHabits()
+    {
+        var allTasks = await _context.Tasks.ToListAsync();
+        if (!allTasks.Any())
+        {
+            return Ok(new HabitRecommendationResultDto
+            {
+                HabitAnalysisSummary = "Henüz sistemde analiz edilecek görev kaydı bulunmamaktadır.",
+                RecommendedHabits = new List<RecommendedHabitDto>()
+            });
+        }
+
+        var habits = await _assistantService.RecommendHabitsAsync(allTasks);
+        return Ok(habits);
+    }
+
+
 }

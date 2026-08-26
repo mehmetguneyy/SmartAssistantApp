@@ -507,4 +507,83 @@ Kategori: ""{category}""";
         }
     }
 
+    public async Task<HabitRecommendationResultDto> RecommendHabitsAsync(IEnumerable<TaskItem> allTasks)
+    {
+        var tasksSummary = allTasks.Select(t => new
+        {
+            t.Title,
+            t.Category,
+            t.IsCompleted
+        }).ToList();
+
+        var prompt = $@"
+Aşağıdaki görev listesini incele:
+{JsonSerializer.Serialize(tasksSummary)}
+
+Bu kullanıcının görev geçmişine göre 3 adet sürdürülebilir alışkanlık/rutin önerisi üret.
+SADECE geçerli bir JSON nesnesi döndür. Markdown (```json) etiketi veya fazladan hiçbir açıklama ekleme.
+
+Format:
+{{
+  ""habitAnalysisSummary"": ""Görev geçmişinize göre spor, yazılım ve planlama odaklı alışkanlıklar önerilmiştir."",
+  ""recommendedHabits"": [
+    {{
+      ""title"": ""Haftalık Kod Gözden Geçirme"",
+      ""category"": ""Yazılım"",
+      ""frequency"": ""Weekly"",
+      ""bestTimeOfDay"": ""Morning"",
+      ""reason"": ""Teknik kaliteyi artırmak için.""
+    }}
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<HabitRecommendationResultDto>(cleanedJson, options);
+            if (result != null && result.RecommendedHabits != null && result.RecommendedHabits.Any())
+            {
+                return result;
+            }
+
+            // Eğer doğrudan deserialize olmadıysa manuel parse dene
+            using var doc = JsonDocument.Parse(cleanedJson);
+            var root = doc.RootElement;
+            var summary = root.GetProperty("habitAnalysisSummary").GetString() ?? "Alışkanlık analizi tamamlandı.";
+            var list = JsonSerializer.Deserialize<List<RecommendedHabitDto>>(root.GetProperty("recommendedHabits").GetRawText(), options);
+
+            return new HabitRecommendationResultDto
+            {
+                HabitAnalysisSummary = summary,
+                RecommendedHabits = list ?? new List<RecommendedHabitDto>()
+            };
+        }
+        catch (Exception ex)
+        {
+            return new HabitRecommendationResultDto
+            {
+                HabitAnalysisSummary = $"Analiz Hatası: {ex.Message} | Ham Yanıt: {responseText}",
+                RecommendedHabits = new List<RecommendedHabitDto>()
+            };
+        }
+    }
+
+
+
 }

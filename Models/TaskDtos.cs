@@ -96,3 +96,18 @@ public class TaskEnrichmentDto
     public List<string> SuggestedTags { get; set; } = new();
     public List<string> ActionTips { get; set; } = new();
 }
+
+public class HabitRecommendationResultDto
+{
+    public string HabitAnalysisSummary { get; set; } = string.Empty;
+    public List<RecommendedHabitDto> RecommendedHabits { get; set; } = new();
+}
+
+public class RecommendedHabitDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Frequency { get; set; } = "Weekly"; // Daily, Weekly, Monthly
+    public string BestTimeOfDay { get; set; } = "Morning"; // Morning, Afternoon, Evening
+    public string Reason { get; set; } = string.Empty;
+}
