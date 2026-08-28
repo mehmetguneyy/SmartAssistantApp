@@ -111,3 +111,76 @@ public class RecommendedHabitDto
     public string BestTimeOfDay { get; set; } = "Morning"; // Morning, Afternoon, Evening
     public string Reason { get; set; } = string.Empty;
 }
+
+public class GoalPlanningRequestDto
+{
+    public string GoalTitle { get; set; } = string.Empty;
+    public string? TargetDuration { get; set; } // Örn: "2 Hafta", "1 Ay", "3 Ay"
+    public string? AdditionalDetails { get; set; }
+}
+
+public class GoalPlanningResultDto
+{
+    public string GoalTitle { get; set; } = string.Empty;
+    public string StrategicSummary { get; set; } = string.Empty;
+    public List<MilestoneDto> Milestones { get; set; } = new();
+}
+
+public class MilestoneDto
+{
+    public int MilestoneOrder { get; set; }
+    public string MilestoneTitle { get; set; } = string.Empty;
+    public string EstimatedDuration { get; set; } = string.Empty;
+    public string SuccessCriteria { get; set; } = string.Empty;
+    public List<string> ActionTasks { get; set; } = new();
+}
+
+public class ProcrastinationRiskDto
+{
+    public int TaskId { get; set; }
+    public string TaskTitle { get; set; } = string.Empty;
+    public string RiskLevel { get; set; } = "Low"; // Critical, Moderate, Low
+    public string RiskReason { get; set; } = string.Empty;
+    public string ProcrastinationTrigger { get; set; } = string.Empty;
+    public string FiveMinuteMicroAction { get; set; } = string.Empty;
+}
+
+public class TaskRiskAnalysisResultDto
+{
+    public string GeneralAssessment { get; set; } = string.Empty;
+    public List<ProcrastinationRiskDto> HighRiskTasks { get; set; } = new();
+}
+
+public class RetrospectiveInsightDto
+{
+    public string Category { get; set; } = string.Empty;
+    public string Observation { get; set; } = string.Empty;
+}
+
+public class WeeklyRetrospectiveResultDto
+{
+    public int ProductivityScore { get; set; }
+    public string WeeklySummary { get; set; } = string.Empty;
+    public List<string> KeyAchievements { get; set; } = new();
+    public List<string> BottlenecksAndChallenges { get; set; } = new();
+    public List<string> NextWeekActionPlan { get; set; } = new();
+    public List<RetrospectiveInsightDto> CategoryInsights { get; set; } = new();
+}
+
+public class TaskDependencyItemDto
+{
+    public int TaskId { get; set; }
+    public string TaskTitle { get; set; } = string.Empty;
+    public List<int> DependsOnTaskIds { get; set; } = new();
+    public string DependencyReason { get; set; } = string.Empty;
+}
+
+public class TaskSequenceAnalysisResultDto
+{
+    public string Summary { get; set; } = string.Empty;
+    public List<int> OptimalExecutionOrderTaskIds { get; set; } = new();
+    public List<TaskDependencyItemDto> TaskDependencies { get; set; } = new();
+    public List<string> CriticalPathHighlights { get; set; } = new();
+    public List<string> WarningsAndBlockers { get; set; } = new();
+}
+

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SmartAssistant.API.Data;
 using SmartAssistant.API.Entities;
 using SmartAssistant.API.Models;
@@ -580,6 +581,330 @@ Format:
             {
                 HabitAnalysisSummary = $"Analiz Hatası: {ex.Message} | Ham Yanıt: {responseText}",
                 RecommendedHabits = new List<RecommendedHabitDto>()
+            };
+        }
+    }
+
+    public async Task<GoalPlanningResultDto> PlanGoalAndMilestonesAsync(GoalPlanningRequestDto request)
+    {
+        var prompt = $@"
+Sen profesyonel bir proje yöneticisi ve stratejik hedef planlama koçusun.
+Kullanıcının belirlediği büyük hedef şu şekildedir:
+- Hedef: {request.GoalTitle}
+- Hedeflenen Süre: {request.TargetDuration ?? "Belirtilmedi"}
+- Ek Açıklama / Kapsam: {request.AdditionalDetails ?? "Yok"}
+
+Bu hedefi inceleyerek:
+1. SMART prensiplerine uygun stratejik bir özet oluştur.
+2. Hedefi 3-4 mantıksal aşamaya/kilometre taşına (Milestone) böl.
+3. Her kilometre taşı için sıra numarası, başlık, tahmini süre, somut başarı kriteri (Success Criteria) ve doğrudan uygulanabilir 2-3 alt aksiyon görevi (ActionTasks) tanımla.
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown (```json) etiketi veya başka açıklama ekleme:
+{{
+  ""goalTitle"": ""{request.GoalTitle}"",
+  ""strategicSummary"": ""Hedefe ulaşmak için belirlenen stratejik yol haritası özeti."",
+  ""milestones"": [
+    {{
+      ""milestoneOrder"": 1,
+      ""milestoneTitle"": ""Temel Gereksinimlerin ve Mimarinin Belirlenmesi"",
+      ""estimatedDuration"": ""1 Hafta"",
+      ""successCriteria"": ""Mimari şablonun çıkarılması ve ortamın kurulması"",
+      ""actionTasks"": [
+        ""Gerekli kütüphaneleri araştır ve listele"",
+        ""Geliştirme ortamını hazırla""
+      ]
+    }}
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<GoalPlanningResultDto>(cleanedJson, options);
+            return result ?? new GoalPlanningResultDto { GoalTitle = request.GoalTitle, StrategicSummary = "Hedef planlandı." };
+        }
+        catch (Exception ex)
+        {
+            return new GoalPlanningResultDto
+            {
+                GoalTitle = request.GoalTitle,
+                StrategicSummary = $"Hedef ayrıştırma sırasında hata oluştu: {ex.Message} | Ham yanıt: {responseText}",
+                Milestones = new List<MilestoneDto>()
+            };
+        }
+    }
+
+    public async Task<TaskRiskAnalysisResultDto> AnalyzeTaskRisksAndProcrastinationAsync()
+    {
+        var pendingTasks = await _context.Tasks
+            .Where(t => !t.IsCompleted)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.Category,
+                t.Priority,
+                DueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd HH:mm") : "Belirtilmemiş"
+            })
+            .ToListAsync();
+
+        if (!pendingTasks.Any())
+        {
+            return new TaskRiskAnalysisResultDto
+            {
+                GeneralAssessment = "Sistemde analiz edilecek bekleyen aktif görev bulunmamaktadır.",
+                HighRiskTasks = new List<ProcrastinationRiskDto>()
+            };
+        }
+
+        var tasksJson = JsonSerializer.Serialize(pendingTasks);
+
+        var prompt = $@"
+Sen üretkenlik ve erteleme (procrastination) üzerine uzmanlaşmış bir AI koçusun.
+Aşağıdaki bekleyen görevleri teslim tarihleri, öncelikleri ve karmaşıklıklarına göre analiz et:
+{tasksJson}
+
+Gereksinimler:
+1. Genel durum değerlendirmesi (GeneralAssessment) yap.
+2. Risk taşıyan veya ertelenme ihtimali yüksek görevleri tespit et.
+3. Her riskli görev için:
+   - Risk Seviyesi (RiskLevel: 'Critical', 'Moderate', 'Low'),
+   - Riskin teknik/zaman gerekçesi (RiskReason),
+   - Kullanıcıyı ertelemeye iten olası psikolojik bariyer (ProcrastinationTrigger - örn. belirsizlik, büyük iş yükü, mükemmeliyetçilik),
+   - Kullanıcının göreve hemen başlamasını sağlayacak somut, çok basit 5 dakikalık ilk adım (FiveMinuteMicroAction).
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya açıklama ekleme:
+{{
+  ""generalAssessment"": ""Genel risk durumu özeti..."",
+  ""highRiskTasks"": [
+    {{
+      ""taskId"": 1,
+      ""taskTitle"": ""Görev Başlığı"",
+      ""riskLevel"": ""Critical"",
+      ""riskReason"": ""Teslim tarihi yakın ve yüksek öncelikli."",
+      ""procrastinationTrigger"": ""Görevin kapsamının geniş görünmesi."",
+      ""fiveMinuteMicroAction"": ""Sadece ilk taslak için 3 maddelik bir not defteri aç.""
+    }}
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<TaskRiskAnalysisResultDto>(cleanedJson, options);
+            return result ?? new TaskRiskAnalysisResultDto { GeneralAssessment = "Risk analizi tamamlandı." };
+        }
+        catch (Exception ex)
+        {
+            return new TaskRiskAnalysisResultDto
+            {
+                GeneralAssessment = $"Risk analizi sırasında hata oluştu: {ex.Message} | Ham yanıt: {responseText}",
+                HighRiskTasks = new List<ProcrastinationRiskDto>()
+            };
+        }
+    }
+
+    public async Task<WeeklyRetrospectiveResultDto> GenerateWeeklyRetrospectiveAsync()
+    {
+        var oneWeekAgo = DateTime.UtcNow.AddDays(-7);
+
+        var tasks = await _context.Tasks
+            .Where(t => t.CreatedAt >= oneWeekAgo || (t.DueDate.HasValue && t.DueDate.Value >= oneWeekAgo) || !t.IsCompleted)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Category,
+                t.Priority,
+                t.IsCompleted,
+                DueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd HH:mm") : "Belirtilmemiş"
+            })
+            .ToListAsync();
+
+        if (!tasks.Any())
+        {
+            return new WeeklyRetrospectiveResultDto
+            {
+                ProductivityScore = 100,
+                WeeklySummary = "Son bir haftaya ait analiz edilecek görev verisi bulunmamaktadır.",
+                KeyAchievements = new List<string> { "Sistemde yeni bir çalışma dönemi başlatıldı." }
+            };
+        }
+
+        var tasksJson = JsonSerializer.Serialize(tasks);
+
+        var prompt = $@"
+Sen çevik (Agile) yönetim ve kişisel verimlilik üzerine uzmanlaşmış kıdemli bir AI Koçusun.
+Aşağıda kullanıcının son 1 haftadaki görev kayıtları yer almaktadır:
+{tasksJson}
+
+Gereksinimler:
+1. Görevlerin tamamlanma durumuna, öncelik dağılımına ve teslim tarihlerine göre 0-100 arasında bir 'productivityScore' belirle.
+2. Haftalık genel durum özeti (weeklySummary) yaz.
+3. Öne çıkan başarıları ve tamamlanan önemli işleri listele (keyAchievements).
+4. Zaman yönetiminde yaşanan aksamaları, ötelenen veya tamamlanamayan görevlerin oluşturduğu darboğazları tespit et (bottlenecksAndChallenges).
+5. Gelecek hafta performansı artırmak için 3 adet somut aksiyon adımı öner (nextWeekActionPlan).
+6. Öne çıkan kategorilere özel kısa analizler üret (categoryInsights).
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya açıklama ekleme:
+{{
+  ""productivityScore"": 85,
+  ""weeklySummary"": ""Haftalık performans özeti..."",
+  ""keyAchievements"": [""Başarı 1"", ""Başarı 2""],
+  ""bottlenecksAndChallenges"": [""Darboğaz 1"", ""Darboğaz 2""],
+  ""nextWeekActionPlan"": [""Eylem 1"", ""Eylem 2"", ""Eylem 3""],
+  ""categoryInsights"": [
+    {{
+      ""category"": ""Yazılım"",
+      ""observation"": ""Backend görevlerinde yüksek tamamlama oranı yakalandı.""
+    }}
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<WeeklyRetrospectiveResultDto>(cleanedJson, options);
+            return result ?? new WeeklyRetrospectiveResultDto { WeeklySummary = "Retrospektif başarıyla oluşturuldu." };
+        }
+        catch (Exception ex)
+        {
+            return new WeeklyRetrospectiveResultDto
+            {
+                WeeklySummary = $"Retrospektif oluşturulurken hata oluştu: {ex.Message} | Ham yanıt: {responseText}"
+            };
+        }
+    }
+
+    public async Task<TaskSequenceAnalysisResultDto> AnalyzeTaskDependenciesAndSequencingAsync()
+    {
+        var pendingTasks = await _context.Tasks
+            .Where(t => !t.IsCompleted)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.Category,
+                t.Priority,
+                DueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd HH:mm") : "Belirtilmemiş"
+            })
+            .ToListAsync();
+
+        if (!pendingTasks.Any())
+        {
+            return new TaskSequenceAnalysisResultDto
+            {
+                Summary = "Analiz edilecek bekleyen aktif görev bulunmamaktadır.",
+                OptimalExecutionOrderTaskIds = new List<int>()
+            };
+        }
+
+        var tasksJson = JsonSerializer.Serialize(pendingTasks);
+
+        var prompt = $@"
+Sen yazılım mühendisliği, proje yönetimi ve kritik yol yöntemi (CPM) konularında uzman bir AI analistisin.
+Aşağıda kullanıcının sistemde bekleyen aktif görev listesi bulunmaktadır:
+{tasksJson}
+
+Gereksinimler:
+1. Görev başlıkları ve açıklamalarındaki mantıksal bağları incele. Hangi görev tamamlanmadan diğerinin başlayamayacağını belirle (DependsOnTaskIds).
+2. Tüm görevlerin icra edilmesi gereken en verimli ve mantıklı çalışma sırasını ID listesi olarak çıkar (OptimalExecutionOrderTaskIds).
+3. Kritik yolda yer alan en hayati adımları vurgula (CriticalPathHighlights).
+4. Olası tıkanma risklerini ve mantık uyuşmazlıklarını uyar olarak listele (WarningsAndBlockers).
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin ekleme:
+{{
+  ""summary"": ""Görev bağımlılık analizi özeti..."",
+  ""optimalExecutionOrderTaskIds"": [1, 3, 2],
+  ""taskDependencies"": [
+    {{
+      ""taskId"": 2,
+      ""taskTitle"": ""Görev Başlığı"",
+      ""dependsOnTaskIds"": [1],
+      ""dependencyReason"": ""1 numaralı görev tamamlanmadan bu işe başlanamaz.""
+    }}
+  ],
+  ""criticalPathHighlights"": [""Kritik yol vurgusu 1""],
+  ""warningsAndBlockers"": [""Uyarı veya darboğaz uyarısı""]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<TaskSequenceAnalysisResultDto>(cleanedJson, options);
+            return result ?? new TaskSequenceAnalysisResultDto { Summary = "Bağımlılık analizi tamamlandı." };
+        }
+        catch (Exception ex)
+        {
+            return new TaskSequenceAnalysisResultDto
+            {
+                Summary = $"Analiz sırasında hata oluştu: {ex.Message} | Ham yanıt: {responseText}"
             };
         }
     }

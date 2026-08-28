@@ -36,4 +36,16 @@ public interface IAssistantService
 
     // Kullanýcýnýn görev geçmiþine göre periyodik alýþkanlýklar ve tekrarlayan görevler öneren metot
     Task<HabitRecommendationResultDto> RecommendHabitsAsync(IEnumerable<TaskItem> allTasks);
+
+    // Kullanýcýnýn büyük hedeflerini analiz edip kilometre taþlarýna (milestones) ve alt aksiyon görevlerine bölen yapay zekâ planlama servisib
+    Task<GoalPlanningResultDto> PlanGoalAndMilestonesAsync(GoalPlanningRequestDto request);
+
+    // Bekleyen görevlerin teslim tarihi risklerini ve erteleme (procrastination) eðilimlerini analiz ederek 5 dakikalýk mikro baþlangýç adýmlarý üreten AI koçluk servisi
+    Task<TaskRiskAnalysisResultDto> AnalyzeTaskRisksAndProcrastinationAsync();
+
+    // Son bir haftadaki tamamlanan ve bekleyen görevleri analiz ederek verimlilik skoru, baþarýlar ve geliþim tavsiyeleri içeren haftalýk retrospektif üreten AI koçluk servisi
+    Task<WeeklyRetrospectiveResultDto> GenerateWeeklyRetrospectiveAsync();
+
+    // Bekleyen görevler arasýndaki mantýksal baðýmlýlýklarý analiz ederek ideal icra sýrasýný ve kritik yolu belirleyen AI servis katmaný
+    Task<TaskSequenceAnalysisResultDto> AnalyzeTaskDependenciesAndSequencingAsync();
 }

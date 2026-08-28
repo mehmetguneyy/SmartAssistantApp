@@ -202,5 +202,37 @@ public class AssistantController : ControllerBase
         return Ok(habits);
     }
 
+    [HttpPost("plan-goal")]
+    public async Task<ActionResult<GoalPlanningResultDto>> PlanGoal([FromBody] GoalPlanningRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.GoalTitle))
+        {
+            return BadRequest("Hedef başlığı (GoalTitle) boş olamaz.");
+        }
+
+        var result = await _assistantService.PlanGoalAndMilestonesAsync(request);
+        return Ok(result);
+    }
+
+    [HttpGet("task-risk-coach")]
+    public async Task<ActionResult<TaskRiskAnalysisResultDto>> GetTaskRiskAndProcrastinationCoach()
+    {
+        var result = await _assistantService.AnalyzeTaskRisksAndProcrastinationAsync();
+        return Ok(result);
+    }
+
+    [HttpGet("weekly-retrospective")]
+    public async Task<ActionResult<WeeklyRetrospectiveResultDto>> GetWeeklyRetrospective()
+    {
+        var result = await _assistantService.GenerateWeeklyRetrospectiveAsync();
+        return Ok(result);
+    }
+
+    [HttpGet("task-dependencies")]
+    public async Task<ActionResult<TaskSequenceAnalysisResultDto>> GetTaskDependenciesAndSequencing()
+    {
+        var result = await _assistantService.AnalyzeTaskDependenciesAndSequencingAsync();
+        return Ok(result);
+    }
 
 }
