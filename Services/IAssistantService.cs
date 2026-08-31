@@ -48,4 +48,7 @@ public interface IAssistantService
 
     // Bekleyen görevler arasýndaki mantýksal baðýmlýlýklarý analiz ederek ideal icra sýrasýný ve kritik yolu belirleyen AI servis katmaný
     Task<TaskSequenceAnalysisResultDto> AnalyzeTaskDependenciesAndSequencingAsync();
+
+    // Sistemdeki mükerrer ve benzer görevleri tespit ederek birleþtirme ve temizleme önerileri sunan AI analiz servisi
+    Task<TaskDeduplicationResultDto> AnalyzeTaskDeduplicationAsync();
 }

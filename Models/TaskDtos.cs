@@ -184,3 +184,20 @@ public class TaskSequenceAnalysisResultDto
     public List<string> WarningsAndBlockers { get; set; } = new();
 }
 
+public class DuplicateTaskGroupDto
+{
+    public List<int> DuplicateTaskIds { get; set; } = new();
+    public string GroupTheme { get; set; } = string.Empty;
+    public string SimilarityReason { get; set; } = string.Empty;
+    public string SuggestedConsolidatedTitle { get; set; } = string.Empty;
+    public string SuggestedConsolidatedDescription { get; set; } = string.Empty;
+    public string RecommendedAction { get; set; } = string.Empty; // Merge, DeleteDuplicates, KeepSeparate
+}
+
+public class TaskDeduplicationResultDto
+{
+    public string Summary { get; set; } = string.Empty;
+    public int RedundantTaskCount { get; set; }
+    public List<DuplicateTaskGroupDto> DuplicateGroups { get; set; } = new();
+    public List<string> CleanUpRecommendations { get; set; } = new();
+}

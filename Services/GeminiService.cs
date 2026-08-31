@@ -909,6 +909,94 @@ SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin 
         }
     }
 
+    public async Task<TaskDeduplicationResultDto> AnalyzeTaskDeduplicationAsync()
+    {
+        var pendingTasks = await _context.Tasks
+            .Where(t => !t.IsCompleted)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.Category,
+                t.Priority,
+                DueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd HH:mm") : "Belirtilmemiş"
+            })
+            .ToListAsync();
+
+        if (!pendingTasks.Any())
+        {
+            return new TaskDeduplicationResultDto
+            {
+                Summary = "Sistemde analiz edilecek bekleyen görev bulunmamaktadır.",
+                RedundantTaskCount = 0,
+                DuplicateGroups = new List<DuplicateTaskGroupDto>()
+            };
+        }
+
+        var tasksJson = JsonSerializer.Serialize(pendingTasks);
+
+        var prompt = $@"
+Sen veri tekilleştirme (deduplication) ve görev optimizasyonu konusunda uzman bir AI veri mimarısın.
+Aşağıda sistemde bekleyen aktif görevler yer almaktadır:
+{tasksJson}
+
+Gereksinimler:
+1. Semantik olarak birbirinin aynısı, tekrarı veya çok benzeri olan görevleri grupla.
+2. Her grup için mükerrer görev ID'lerini listele (duplicateTaskIds).
+3. Grubun ortak temasını (groupTheme) ve benzerlik gerekçesini (similarityReason) açıkla.
+4. Bu görevlerin birleştirilmesi durumunda önerilen tek bir optimize görev başlığı (suggestedConsolidatedTitle) ve açıklaması (suggestedConsolidatedDescription) üret.
+5. Uygun aksiyon tavsiyesi ver (recommendedAction: 'Merge', 'DeleteDuplicates', 'KeepSeparate').
+6. Genel temizlik tavsiyelerini listele (cleanUpRecommendations).
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin ekleme:
+{{
+  ""summary"": ""Mükerrer görev analizi özeti..."",
+  ""redundantTaskCount"": 3,
+  ""duplicateGroups"": [
+    {{
+      ""duplicateTaskIds"": [7, 16],
+      ""groupTheme"": ""Staj Raporlama Süreci"",
+      ""similarityReason"": ""Aynı haftalık rapor işi birden fazla kez sisteme girilmiş."",
+      ""suggestedConsolidatedTitle"": ""Haftalık Staj Raporunu Hazırla ve Deftere İşle"",
+      ""suggestedConsolidatedDescription"": ""Tüm haftalık kazanımları toparlayıp defter formatına aktar."",
+      ""recommendedAction"": ""Merge""
+    }}
+  ],
+  ""cleanUpRecommendations"": [""Tavsiye 1"", ""Tavsiye 2""]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<TaskDeduplicationResultDto>(cleanedJson, options);
+            return result ?? new TaskDeduplicationResultDto { Summary = "Mükerrer görev analizi tamamlandı." };
+        }
+        catch (Exception ex)
+        {
+            return new TaskDeduplicationResultDto
+            {
+                Summary = $"Analiz sırasında hata oluştu: {ex.Message} | Ham yanıt: {responseText}"
+            };
+        }
+    }
+
 
 
 }

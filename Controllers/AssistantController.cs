@@ -235,4 +235,12 @@ public class AssistantController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("task-deduplication")]
+    public async Task<ActionResult<TaskDeduplicationResultDto>> GetTaskDeduplicationAnalysis()
+    {
+        var result = await _assistantService.AnalyzeTaskDeduplicationAsync();
+        return Ok(result);
+    }
+
+
 }
