@@ -248,4 +248,11 @@ public class AssistantController : ControllerBase
         var result = await _assistantService.SearchTasksWithNaturalLanguageAsync(request.Query);
         return Ok(result);
     }
+
+    [HttpGet("simulate-error")]
+    public IActionResult SimulateError()
+    {
+        throw new InvalidOperationException("Global Exception Middleware test amaçlı yapay hata simülasyonu!");
+    }
 }
+
