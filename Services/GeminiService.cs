@@ -997,6 +997,107 @@ SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin 
         }
     }
 
+    public async Task<SmartSearchResultDto> SearchTasksWithNaturalLanguageAsync(string userQuery)
+    {
+        if (string.IsNullOrWhiteSpace(userQuery))
+        {
+            return new SmartSearchResultDto
+            {
+                InterpretedIntent = "Boş sorgu",
+                SearchSummary = "Lütfen arama yapmak için bir ifade giriniz.",
+                MatchedTasks = new List<MatchedTaskItemDto>()
+            };
+        }
+
+        var tasks = await _context.Tasks
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Description,
+                t.Category,
+                t.Priority,
+                t.IsCompleted,
+                DueDate = t.DueDate.HasValue ? t.DueDate.Value.ToString("yyyy-MM-dd HH:mm") : "Belirtilmemiş"
+            })
+            .ToListAsync();
+
+        if (!tasks.Any())
+        {
+            return new SmartSearchResultDto
+            {
+                InterpretedIntent = userQuery,
+                SearchSummary = "Sistemde taranacak görev bulunmamaktadır.",
+                MatchedTasks = new List<MatchedTaskItemDto>()
+            };
+        }
+
+        var tasksJson = JsonSerializer.Serialize(tasks);
+
+        var prompt = $@"
+Sen doğal dil anlama (NLU) ve anlamsal arama (semantic search) konusunda uzman bir AI motorusun.
+Kullanıcının Arama Sorgusu: ""{userQuery}""
+
+Veritabanındaki Görev Listesi:
+{tasksJson}
+
+Gereksinimler:
+1. Kullanıcının arama niyetini ve aradığı kriterleri özetle (InterpretedIntent).
+2. Bu niyetle anlamsal olarak uyuşan veya doğrudan eşleşen görevleri bul.
+3. Eşleşen her görev için:
+   - 1-100 arası alaka puanı (RelevanceScore),
+   - Görevin bu aramayla neden eşleştiğini açıklayan kısa gerekçe (MatchReason).
+4. Görevleri en yüksek alaka puanından en düşüğe doğru sırala.
+5. Genel bir arama sonucu özeti (SearchSummary) yaz.
+
+SADECE aşağıdaki JSON formatında yanıt ver. Markdown etiketi veya ek metin ekleme:
+{{
+  ""interpretedIntent"": ""Kullanıcı yazılım alanındaki yüksek öncelikli işleri arıyor."",
+  ""searchSummary"": ""Toplam 3 ilgili görev bulundu."",
+  ""matchedTasks"": [
+    {{
+      ""taskId"": 5,
+      ""taskTitle"": "".NET API Dokümantasyonu"",
+      ""category"": ""Yazılım"",
+      ""priority"": ""High"",
+      ""relevanceScore"": 95,
+      ""matchReason"": ""Sorgudaki yazılım ve yüksek öncelik kriterlerine tam uymaktadır.""
+    }}
+  ]
+}}";
+
+        var requestBody = new
+        {
+            contents = new[]
+            {
+            new { parts = new[] { new { text = prompt } } }
+        }
+        };
+
+        var responseText = await CallGeminiApiAsync(requestBody);
+
+        try
+        {
+            var cleanedJson = responseText.Trim();
+            if (cleanedJson.StartsWith("```json")) cleanedJson = cleanedJson.Substring(7);
+            if (cleanedJson.StartsWith("```")) cleanedJson = cleanedJson.Substring(3);
+            if (cleanedJson.EndsWith("```")) cleanedJson = cleanedJson.Substring(0, cleanedJson.Length - 3);
+            cleanedJson = cleanedJson.Trim();
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var result = JsonSerializer.Deserialize<SmartSearchResultDto>(cleanedJson, options);
+            return result ?? new SmartSearchResultDto { SearchSummary = "Arama tamamlandı." };
+        }
+        catch (Exception ex)
+        {
+            return new SmartSearchResultDto
+            {
+                InterpretedIntent = userQuery,
+                SearchSummary = $"Arama sırasında hata oluştu: {ex.Message} | Ham yanıt: {responseText}",
+                MatchedTasks = new List<MatchedTaskItemDto>()
+            };
+        }
+    }
 
 
 }

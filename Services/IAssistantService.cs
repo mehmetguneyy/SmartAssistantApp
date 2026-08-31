@@ -51,4 +51,7 @@ public interface IAssistantService
 
     // Sistemdeki mükerrer ve benzer görevleri tespit ederek birleþtirme ve temizleme önerileri sunan AI analiz servisi
     Task<TaskDeduplicationResultDto> AnalyzeTaskDeduplicationAsync();
+
+    // Doðal dilde girilen kullanýcý sorgusunu analiz ederek niyet eþleþtirmesi ve semantik görev aramasý yapan AI servisi
+    Task<SmartSearchResultDto> SearchTasksWithNaturalLanguageAsync(string userQuery);
 }

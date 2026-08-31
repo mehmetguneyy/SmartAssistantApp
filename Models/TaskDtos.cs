@@ -201,3 +201,27 @@ public class TaskDeduplicationResultDto
     public List<DuplicateTaskGroupDto> DuplicateGroups { get; set; } = new();
     public List<string> CleanUpRecommendations { get; set; } = new();
 }
+
+
+public class SmartSearchRequestDto
+{
+    public string Query { get; set; } = string.Empty;
+}
+
+public class MatchedTaskItemDto
+{
+    public int TaskId { get; set; }
+    public string TaskTitle { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public int RelevanceScore { get; set; } // 1-100
+    public string MatchReason { get; set; } = string.Empty;
+}
+
+public class SmartSearchResultDto
+{
+    public string InterpretedIntent { get; set; } = string.Empty;
+    public List<MatchedTaskItemDto> MatchedTasks { get; set; } = new();
+    public string SearchSummary { get; set; } = string.Empty;
+}
+

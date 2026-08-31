@@ -242,5 +242,10 @@ public class AssistantController : ControllerBase
         return Ok(result);
     }
 
-
+    [HttpPost("smart-search")]
+    public async Task<ActionResult<SmartSearchResultDto>> SmartTaskSearch([FromBody] SmartSearchRequestDto request)
+    {
+        var result = await _assistantService.SearchTasksWithNaturalLanguageAsync(request.Query);
+        return Ok(result);
+    }
 }
